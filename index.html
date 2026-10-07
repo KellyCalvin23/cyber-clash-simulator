@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberClash: Red vs Blue Cyber Security Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- HEADER -->
+        <header class="navbar">
+            <div class="brand">
+                <span class="shield-icon">🛡️</span>
+                <h1>CYBER<span class="highlight-red">CLASH</span> <span class="subtitle">| Red vs Blue Simulator</span></h1>
+            </div>
+            
+            <div class="global-stats">
+                <div class="stat-pill health-pill" id="healthPill">
+                    <span class="label">Server Health</span>
+                    <div class="bar-container">
+                        <div class="bar-fill" id="healthBar" style="width: 100%;"></div>
+                    </div>
+                    <span class="value" id="healthValue">100%</span>
+                </div>
+
+                <div class="stat-pill score-pill">
+                    <span class="label">Blue Team Score</span>
+                    <span class="value score-blue" id="blueScore">0</span>
+                </div>
+
+                <div class="stat-pill score-pill">
+                    <span class="label">Red Team Score</span>
+                    <span class="value score-red" id="redScore">0</span>
+                </div>
+            </div>
+
+            <div class="header-controls">
+                <button id="soundToggle" class="btn btn-icon" title="Toggle Sound FX">
+                    <span id="soundIcon">🔊</span> Sound: ON
+                </button>
+                <button id="resetBtn" class="btn btn-secondary" title="Reset Simulation">
+                    🔄 Reset Sim
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN TOPOLOGY CANVAS & STATUS -->
+        <section class="topology-section card">
+            <div class="card-header">
+                <h2>🌐 Live Network Topology & Infrastructure</h2>
+                <div class="status-badges">
+                    <span class="badge badge-success" id="serverStatusBadge">SYSTEM ONLINE</span>
+                    <span class="badge badge-info" id="activeThreatsBadge">Threats: 0 Active</span>
+                </div>
+            </div>
+            <div class="canvas-wrapper">
+                <canvas id="networkCanvas"></canvas>
+            </div>
+        </section>
+
+        <!-- DASHBOARD SPLIT GRID: RED TEAM vs BLUE TEAM -->
+        <div class="grid-two-col">
+            <!-- RED TEAM PANEL -->
+            <section class="card panel-red">
+                <div class="card-header red-header">
+                    <h2>🔴 Red Team Command (Attacker)</h2>
+                    <span class="tag tag-red">OFFENSIVE CONTROL</span>
+                </div>
+                <p class="panel-desc">Select an attack scenario to test the website's defenses!</p>
+
+                <div class="scenario-list">
+                    <!-- Scenario 1: Brute Force -->
+                    <div class="scenario-card">
+                        <div class="scenario-info">
+                            <span class="icon">🔓</span>
+                            <div>
+                                <h3>1. Password Brute-Force</h3>
+                                <p class="scenario-meta">Tries thousands of common passwords against the login page.</p>
+                            </div>
+                        </div>
+                        <div class="scenario-actions">
+                            <button class="btn btn-red" onclick="triggerAttack('brute_force')">🚀 Launch Attack</button>
+                            <button class="btn btn-ghost" onclick="showInfo('brute_force')">❓ Info</button>
+                        </div>
+                    </div>
+
+                    <!-- Scenario 2: Phishing -->
+                    <div class="scenario-card">
+                        <div class="scenario-info">
+                            <span class="icon">🎣</span>
+                            <div>
+                                <h3>2. Phishing Email Campaign</h3>
+                                <p class="scenario-meta">Sends fake emergency emails to trick staff into giving passwords.</p>
+                            </div>
+                        </div>
+                        <div class="scenario-actions">
+                            <button class="btn btn-red" onclick="triggerAttack('phishing')">🚀 Send Phish</button>
+                            <button class="btn btn-ghost" onclick="showInfo('phishing')">❓ Info</button>
+                        </div>
+                    </div>
+
+                    <!-- Scenario 3: DDoS Flood -->
+                    <div class="scenario-card">
+                        <div class="scenario-info">
+                            <span class="icon">⚡</span>
+                            <div>
+                                <h3>3. DDoS Traffic Flood</h3>
+                                <p class="scenario-meta">Floods the web server with fake traffic to crash the website.</p>
+                            </div>
+                        </div>
+                        <div class="scenario-actions">
+                            <button class="btn btn-red" onclick="triggerAttack('ddos')">🚀 Flood Server</button>
+                            <button class="btn btn-ghost" onclick="showInfo('ddos')">❓ Info</button>
+                        </div>
+                    </div>
+
+                    <!-- Scenario 4: SQL Injection -->
+                    <div class="scenario-card">
+                        <div class="scenario-info">
+                            <span class="icon">💉</span>
+                            <div>
+                                <h3>4. SQL Injection Exploit</h3>
+                                <p class="scenario-meta">Injects malicious code into search form to steal database contents.</p>
+                            </div>
+                        </div>
+                        <div class="scenario-actions">
+                            <button class="btn btn-red" onclick="triggerAttack('sqli')">🚀 Inject Payload</button>
+                            <button class="btn btn-ghost" onclick="showInfo('sqli')">❓ Info</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- BLUE TEAM PANEL -->
+            <section class="card panel-blue">
+                <div class="card-header blue-header">
+                    <h2>🔵 Blue Team SOC (Defender)</h2>
+                    <span class="tag tag-blue">DEFENSIVE CONTROL</span>
+                </div>
+                <p class="panel-desc">Activate security countermeasures to defend the web application!</p>
+
+                <div class="defense-list">
+                    <!-- Defense 1: MFA & Password Policy -->
+                    <div class="defense-card">
+                        <div class="defense-info">
+                            <span class="icon">🔑</span>
+                            <div>
+                                <h3>Multi-Factor Authentication (MFA)</h3>
+                                <p class="defense-meta">Requires 2-step verification code & locks out repeated failed logins.</p>
+                            </div>
+                        </div>
+                        <div class="defense-actions">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="def_mfa" onchange="toggleDefense('mfa', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Defense 2: Email Security Filter -->
+                    <div class="defense-card">
+                        <div class="defense-info">
+                            <span class="icon">📧</span>
+                            <div>
+                                <h3>Email Gateway & Awareness Training</h3>
+                                <p class="defense-meta">Scans incoming emails for fake links & trains users not to click suspicious emails.</p>
+                            </div>
+                        </div>
+                        <div class="defense-actions">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="def_phish" onchange="toggleDefense('phish', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Defense 3: Web Application Firewall & Rate Limiting -->
+                    <div class="defense-card">
+                        <div class="defense-info">
+                            <span class="icon">🛡️</span>
+                            <div>
+                                <h3>WAF & Rate Limiting Firewall</h3>
+                                <p class="defense-meta">Blocks abnormal spike traffic and drops botnet request floods.</p>
+                            </div>
+                        </div>
+                        <div class="defense-actions">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="def_waf" onchange="toggleDefense('waf', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Defense 4: Input Sanitization -->
+                    <div class="defense-card">
+                        <div class="defense-info">
+                            <span class="icon">🧹</span>
+                            <div>
+                                <h3>Input Sanitization & Prepared Queries</h3>
+                                <p class="defense-meta">Cleans search inputs so database queries treat inputs safely as plain text.</p>
+                            </div>
+                        </div>
+                        <div class="defense-actions">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="def_sqli" onchange="toggleDefense('sqli', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- SIEM LOGS & EVENT CONSOLE -->
+        <section class="card console-section">
+            <div class="card-header console-header">
+                <h2>📡 SIEM Security Event Monitor & Logs</h2>
+                <button class="btn btn-ghost btn-sm" onclick="clearLogs()">Clear Console</button>
+            </div>
+            <div class="console-body" id="consoleBody">
+                <div class="log-entry log-system">[SYSTEM INITIALIZED] CyberClash Simulation Ready. Awaiting network activity...</div>
+            </div>
+        </section>
+    </div>
+
+    <!-- EDUCATIONAL KNOWLEDGE MODAL -->
+    <div id="infoModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modalTitle">Cyber Concept</h3>
+                <button class="modal-close" onclick="closeModal()">✖</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Content injected dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal()">Got it!</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
