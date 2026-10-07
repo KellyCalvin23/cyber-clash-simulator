@@ -3,244 +3,214 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CyberClash: Red vs Blue Cyber Security Simulator</title>
+    <title>CyberClash: SIEM & Red/Blue Simulation Command Center</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="view-mode-dual">
+    <!-- APP WRAPPER -->
     <div class="app-container">
-        <!-- HEADER -->
+        <!-- GLOBAL NAVBAR & VIEW SWITCHER -->
         <header class="navbar">
             <div class="brand">
                 <span class="shield-icon">🛡️</span>
-                <h1>CYBER<span class="highlight-red">CLASH</span> <span class="subtitle">| Red vs Blue Simulator</span></h1>
+                <h1>CYBER<span class="highlight-blue">SOC</span> <span class="subtitle">| Security Operations Center</span></h1>
             </div>
-            
-            <div class="global-stats">
-                <div class="stat-pill health-pill" id="healthPill">
-                    <span class="label">Server Health</span>
-                    <div class="bar-container">
-                        <div class="bar-fill" id="healthBar" style="width: 100%;"></div>
-                    </div>
-                    <span class="value" id="healthValue">100%</span>
-                </div>
 
-                <div class="stat-pill score-pill">
-                    <span class="label">Blue Team Score</span>
-                    <span class="value score-blue" id="blueScore">0</span>
-                </div>
-
-                <div class="stat-pill score-pill">
-                    <span class="label">Red Team Score</span>
-                    <span class="value score-red" id="redScore">0</span>
-                </div>
+            <!-- VIEW MODE SWITCHER -->
+            <div class="view-switcher">
+                <button class="view-btn active" onclick="switchView('dual')">🌗 Dual Split View</button>
+                <button class="view-btn" onclick="switchView('red')">🔴 Red Team Window</button>
+                <button class="view-btn" onclick="switchView('blue')">🔵 Blue Team SIEM Window</button>
             </div>
 
             <div class="header-controls">
                 <button id="soundToggle" class="btn btn-icon" title="Toggle Sound FX">
                     <span id="soundIcon">🔊</span> Sound: ON
                 </button>
-                <button id="resetBtn" class="btn btn-secondary" title="Reset Simulation">
+                <button id="resetBtn" class="btn btn-secondary" onclick="resetSim()">
                     🔄 Reset Sim
                 </button>
             </div>
         </header>
 
-        <!-- MAIN TOPOLOGY CANVAS & STATUS -->
-        <section class="topology-section card">
-            <div class="card-header">
-                <h2>🌐 Live Network Topology & Infrastructure</h2>
-                <div class="status-badges">
-                    <span class="badge badge-success" id="serverStatusBadge">SYSTEM ONLINE</span>
-                    <span class="badge badge-info" id="activeThreatsBadge">Threats: 0 Active</span>
+        <!-- MAIN LAYOUT GRID -->
+        <main class="main-layout" id="mainLayout">
+            
+            <!-- ================= RED TEAM ATTACKER WINDOW ================= -->
+            <section class="window-panel panel-red" id="redWindow">
+                <div class="window-header">
+                    <div class="window-title">
+                        <span class="dot red-dot"></span>
+                        <h2>🔴 Red Team Attacker Terminal</h2>
+                    </div>
+                    <span class="tag tag-red">OFFENSIVE CONSOLE</span>
                 </div>
-            </div>
-            <div class="canvas-wrapper">
-                <canvas id="networkCanvas"></canvas>
-            </div>
-        </section>
 
-        <!-- DASHBOARD SPLIT GRID: RED TEAM vs BLUE TEAM -->
-        <div class="grid-two-col">
-            <!-- RED TEAM PANEL -->
-            <section class="card panel-red">
-                <div class="card-header red-header">
-                    <h2>🔴 Red Team Command (Attacker)</h2>
-                    <span class="tag tag-red">OFFENSIVE CONTROL</span>
-                </div>
-                <p class="panel-desc">Select an attack scenario to test the website's defenses!</p>
-
-                <div class="scenario-list">
-                    <!-- Scenario 1: Brute Force -->
-                    <div class="scenario-card">
-                        <div class="scenario-info">
-                            <span class="icon">🔓</span>
-                            <div>
-                                <h3>1. Password Brute-Force</h3>
-                                <p class="scenario-meta">Tries thousands of common passwords against the login page.</p>
-                            </div>
+                <div class="panel-body">
+                    <!-- ATTACK CONFIGURATION FORM -->
+                    <div class="card attack-config-card">
+                        <h3>⚡ Brute Force Attack Configuration</h3>
+                        
+                        <div class="form-group">
+                            <label for="targetUserSelect">🎯 Select Target Account:</label>
+                            <select id="targetUserSelect" class="form-control">
+                                <option value="admin@company.com">admin@company.com (Administrator)</option>
+                                <option value="finance_user@company.com">finance_user@company.com (Finance Dept)</option>
+                                <option value="ceo_david@company.com">ceo_david@company.com (Executive CEO)</option>
+                                <option value="student_alex@company.com">student_alex@company.com (User Account)</option>
+                            </select>
                         </div>
-                        <div class="scenario-actions">
-                            <button class="btn btn-red" onclick="triggerAttack('brute_force')">🚀 Launch Attack</button>
-                            <button class="btn btn-ghost" onclick="showInfo('brute_force')">❓ Info</button>
+
+                        <div class="form-group">
+                            <label for="originIpSelect">🌍 Select Attacker IP & Location:</label>
+                            <select id="originIpSelect" class="form-control">
+                                <option value="185.220.101.5|Frankfurt, Germany|🇩🇪">185.220.101.5 — 🇩🇪 Frankfurt, Germany</option>
+                                <option value="45.154.255.88|Moscow, Russia|🇷🇺">45.154.255.88 — 🇷🇺 Moscow, Russia</option>
+                                <option value="103.251.170.2|Beijing, China|🇨🇳">103.251.170.2 — 🇨🇳 Beijing, China</option>
+                                <option value="198.51.100.44|New York, USA|🇺🇸">198.51.100.44 — 🇺🇸 New York, USA</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="dictionarySelect">📖 Password Dictionary Payload:</label>
+                            <select id="dictionarySelect" class="form-control">
+                                <option value="top_50">Top 50 Most Common Passwords (fast)</option>
+                                <option value="rockyou_sample">RockYou Leaked Password List (aggressive)</option>
+                            </select>
+                        </div>
+
+                        <div class="action-buttons">
+                            <button id="launchAttackBtn" class="btn btn-red btn-lg" onclick="startBruteForce()">
+                                🚀 Launch Brute Force Attack
+                            </button>
+                            <button id="stopAttackBtn" class="btn btn-secondary btn-lg hidden" onclick="stopBruteForce()">
+                                ⏹️ Stop Attack
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Scenario 2: Phishing -->
-                    <div class="scenario-card">
-                        <div class="scenario-info">
-                            <span class="icon">🎣</span>
-                            <div>
-                                <h3>2. Phishing Email Campaign</h3>
-                                <p class="scenario-meta">Sends fake emergency emails to trick staff into giving passwords.</p>
-                            </div>
+                    <!-- RED TEAM LIVE TERMINAL OUTPUT -->
+                    <div class="card terminal-card">
+                        <div class="card-header">
+                            <span class="terminal-dots">🔴 🟡 🟢</span>
+                            <span class="terminal-title">attacker@exploit-box:~</span>
+                            <button class="btn btn-ghost btn-sm" onclick="clearRedTerminal()">Clear</button>
                         </div>
-                        <div class="scenario-actions">
-                            <button class="btn btn-red" onclick="triggerAttack('phishing')">🚀 Send Phish</button>
-                            <button class="btn btn-ghost" onclick="showInfo('phishing')">❓ Info</button>
-                        </div>
-                    </div>
-
-                    <!-- Scenario 3: DDoS Flood -->
-                    <div class="scenario-card">
-                        <div class="scenario-info">
-                            <span class="icon">⚡</span>
-                            <div>
-                                <h3>3. DDoS Traffic Flood</h3>
-                                <p class="scenario-meta">Floods the web server with fake traffic to crash the website.</p>
-                            </div>
-                        </div>
-                        <div class="scenario-actions">
-                            <button class="btn btn-red" onclick="triggerAttack('ddos')">🚀 Flood Server</button>
-                            <button class="btn btn-ghost" onclick="showInfo('ddos')">❓ Info</button>
-                        </div>
-                    </div>
-
-                    <!-- Scenario 4: SQL Injection -->
-                    <div class="scenario-card">
-                        <div class="scenario-info">
-                            <span class="icon">💉</span>
-                            <div>
-                                <h3>4. SQL Injection Exploit</h3>
-                                <p class="scenario-meta">Injects malicious code into search form to steal database contents.</p>
-                            </div>
-                        </div>
-                        <div class="scenario-actions">
-                            <button class="btn btn-red" onclick="triggerAttack('sqli')">🚀 Inject Payload</button>
-                            <button class="btn btn-ghost" onclick="showInfo('sqli')">❓ Info</button>
+                        <div class="terminal-body" id="redTerminal">
+                            <div class="term-line term-system">[IDLE] Select target account and click Launch Brute Force Attack...</div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- BLUE TEAM PANEL -->
-            <section class="card panel-blue">
-                <div class="card-header blue-header">
-                    <h2>🔵 Blue Team SOC (Defender)</h2>
-                    <span class="tag tag-blue">DEFENSIVE CONTROL</span>
+
+            <!-- ================= BLUE TEAM SIEM SOC WINDOW ================= -->
+            <section class="window-panel panel-blue" id="blueWindow">
+                <div class="window-header">
+                    <div class="window-title">
+                        <span class="dot blue-dot"></span>
+                        <h2>🔵 Blue Team SIEM SOC Dashboard</h2>
+                    </div>
+                    <div class="siem-status-badge">
+                        <span class="pulse-indicator green" id="threatPulse"></span>
+                        <span id="threatLevelText">THREAT LEVEL: LOW</span>
+                    </div>
                 </div>
-                <p class="panel-desc">Activate security countermeasures to defend the web application!</p>
 
-                <div class="defense-list">
-                    <!-- Defense 1: MFA & Password Policy -->
-                    <div class="defense-card">
-                        <div class="defense-info">
-                            <span class="icon">🔑</span>
-                            <div>
-                                <h3>Multi-Factor Authentication (MFA)</h3>
-                                <p class="defense-meta">Requires 2-step verification code & locks out repeated failed logins.</p>
-                            </div>
+                <div class="panel-body">
+                    
+                    <!-- SIEM METRICS CARDS -->
+                    <div class="siem-metrics-grid">
+                        <div class="metric-card">
+                            <span class="metric-label">Active Alerts</span>
+                            <span class="metric-value text-red" id="activeAlertsCount">0</span>
                         </div>
-                        <div class="defense-actions">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="def_mfa" onchange="toggleDefense('mfa', this.checked)">
-                                <span class="slider"></span>
-                            </label>
+                        <div class="metric-card">
+                            <span class="metric-label">Blocked IPs</span>
+                            <span class="metric-value text-blue" id="blockedIpCount">0</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">SIEM Score</span>
+                            <span class="metric-value text-green" id="siemScore">100</span>
                         </div>
                     </div>
 
-                    <!-- Defense 2: Email Security Filter -->
-                    <div class="defense-card">
-                        <div class="defense-info">
-                            <span class="icon">📧</span>
-                            <div>
-                                <h3>Email Gateway & Awareness Training</h3>
-                                <p class="defense-meta">Scans incoming emails for fake links & trains users not to click suspicious emails.</p>
-                            </div>
+                    <!-- GEOGRAPHIC THREAT MAP WIDGET -->
+                    <div class="card geo-map-card">
+                        <div class="card-header">
+                            <h3>🗺️ Real-Time Geographic Threat Tracker</h3>
+                            <span class="badge badge-info" id="geoMapStatus">Monitoring Inbound Traffic</span>
                         </div>
-                        <div class="defense-actions">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="def_phish" onchange="toggleDefense('phish', this.checked)">
-                                <span class="slider"></span>
-                            </label>
+                        <div class="map-container">
+                            <canvas id="geoCanvas"></canvas>
+                            <!-- Live Incident Overlay Banner -->
+                            <div id="incidentBanner" class="incident-banner hidden">
+                                <div class="incident-header">
+                                    <span class="flashing-warning">🚨 HIGH SEVERITY ALERT</span>
+                                    <span class="incident-time" id="alertTimestamp">15:22:00</span>
+                                </div>
+                                <div class="incident-details">
+                                    <p><strong>Incident:</strong> Brute-Force Authentication Attack</p>
+                                    <p><strong>Targeted User:</strong> <span class="highlight-target" id="alertTargetUser">admin@company.com</span></p>
+                                    <p><strong>Attacker IP:</strong> <code id="alertSourceIp">185.220.101.5</code> (<span id="alertLocation">Frankfurt, Germany 🇩🇪</span>)</p>
+                                    <p><strong>Velocity:</strong> <span id="alertRate">350 attempts/min</span></p>
+                                </div>
+                                <div class="incident-actions">
+                                    <button class="btn btn-danger btn-pulse" onclick="blockAttackerIp()">
+                                        🛑 BLOCK IP ADDRESS NOW
+                                    </button>
+                                    <button class="btn btn-ghost" onclick="dismissAlert()">Dismiss</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Defense 3: Web Application Firewall & Rate Limiting -->
-                    <div class="defense-card">
-                        <div class="defense-info">
-                            <span class="icon">🛡️</span>
-                            <div>
-                                <h3>WAF & Rate Limiting Firewall</h3>
-                                <p class="defense-meta">Blocks abnormal spike traffic and drops botnet request floods.</p>
+                    <!-- LOWER SPLIT: SIEM EVENT LOGS & FIREWALL BLOCKLIST -->
+                    <div class="siem-lower-grid">
+                        
+                        <!-- SIEM SECURITY LOG STREAM -->
+                        <div class="card siem-logs-card">
+                            <div class="card-header">
+                                <h3>📡 SIEM Live Event Stream</h3>
+                                <button class="btn btn-ghost btn-sm" onclick="clearSiemLogs()">Clear Logs</button>
+                            </div>
+                            <div class="siem-log-console" id="siemConsole">
+                                <div class="log-row log-info">[SIEM READY] Security agents connected. Monitoring port 443 / 80...</div>
                             </div>
                         </div>
-                        <div class="defense-actions">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="def_waf" onchange="toggleDefense('waf', this.checked)">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                    </div>
 
-                    <!-- Defense 4: Input Sanitization -->
-                    <div class="defense-card">
-                        <div class="defense-info">
-                            <span class="icon">🧹</span>
-                            <div>
-                                <h3>Input Sanitization & Prepared Queries</h3>
-                                <p class="defense-meta">Cleans search inputs so database queries treat inputs safely as plain text.</p>
+                        <!-- FIREWALL IP BLOCKLIST TABLE -->
+                        <div class="card blocklist-card">
+                            <div class="card-header">
+                                <h3>🛡️ Active Firewall IP Blocklist</h3>
+                            </div>
+                            <div class="table-wrapper">
+                                <table class="blocklist-table">
+                                    <thead>
+                                        <tr>
+                                            <th>IP Address</th>
+                                            <th>Location</th>
+                                            <th>Reason</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="blocklistTableBody">
+                                        <tr id="emptyBlocklistRow">
+                                            <td colspan="4" class="text-center text-muted">No IP addresses blocked yet.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                        <div class="defense-actions">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="def_sqli" onchange="toggleDefense('sqli', this.checked)">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
+
                     </div>
                 </div>
             </section>
-        </div>
 
-        <!-- SIEM LOGS & EVENT CONSOLE -->
-        <section class="card console-section">
-            <div class="card-header console-header">
-                <h2>📡 SIEM Security Event Monitor & Logs</h2>
-                <button class="btn btn-ghost btn-sm" onclick="clearLogs()">Clear Console</button>
-            </div>
-            <div class="console-body" id="consoleBody">
-                <div class="log-entry log-system">[SYSTEM INITIALIZED] CyberClash Simulation Ready. Awaiting network activity...</div>
-            </div>
-        </section>
-    </div>
-
-    <!-- EDUCATIONAL KNOWLEDGE MODAL -->
-    <div id="infoModal" class="modal-overlay hidden">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3 id="modalTitle">Cyber Concept</h3>
-                <button class="modal-close" onclick="closeModal()">✖</button>
-            </div>
-            <div class="modal-body" id="modalBody">
-                <!-- Content injected dynamically -->
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="closeModal()">Got it!</button>
-            </div>
-        </div>
+        </main>
     </div>
 
     <script src="app.js"></script>

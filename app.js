@@ -1,34 +1,44 @@
-// CyberClash: Red vs Blue Simulator Logic
+// CyberSOC: Red vs Blue SIEM Simulator Engine
 
 // Global State
 const state = {
-    health: 100,
-    blueScore: 0,
-    redScore: 0,
-    activeThreats: 0,
+    viewMode: 'dual',
+    isAttacking: false,
+    attackInterval: null,
+    targetUser: 'admin@company.com',
+    originIp: '185.220.101.5',
+    location: 'Frankfurt, Germany',
+    flag: '🇩🇪',
+    blockedIps: [],
+    siemScore: 100,
     soundEnabled: true,
-    defenses: {
-        mfa: false,
-        phish: false,
-        waf: false,
-        sqli: false
+    attemptsCount: 0
+};
+
+// Cross-Window Broadcast Synchronization
+const channel = new BroadcastChannel('cyber_soc_channel');
+
+channel.onmessage = (event) => {
+    const { type, data } = event.data;
+    if (type === 'START_ATTACK') {
+        handleIncomingAttack(data);
+    } else if (type === 'STOP_ATTACK') {
+        handleStopAttack(data);
+    } else if (type === 'BLOCK_IP') {
+        handleIpBlocked(data);
+    } else if (type === 'RESET') {
+        resetLocalState();
     }
 };
 
-// Canvas & Topology Setup
-let canvas, ctx;
-let packets = [];
-let particles = [];
-let animFrameId;
-
-// Topology Node Positions (Relative %)
-const nodes = {
-    attacker: { x: 0.1, y: 0.5, name: 'Attacker (Red)', icon: '🔴', type: 'red' },
-    firewall: { x: 0.35, y: 0.5, name: 'WAF & Firewall', icon: '🛡️', type: 'blue' },
-    server: { x: 0.65, y: 0.5, name: 'Web Server', icon: '🖥️', type: 'server' },
-    db: { x: 0.88, y: 0.3, name: 'Database', icon: '🗄️', type: 'db' },
-    employee: { x: 0.88, y: 0.7, name: 'Employee PC', icon: '💻', type: 'user' }
-};
+// Password Dictionary for Brute Force
+const passwordDictionary = [
+    "123456", "password", "123456789", "picture1", "password1",
+    "12345", "12345678", "qwerty", "111111", "welcome",
+    "admin123", "letmein", "monkey", "dragon", "baseball",
+    "mustang", "shadow", "master", "michael", "superman",
+    "654321", "amber", "iloveyou", "trustno1", "welcome2026"
+];
 
 // --- WEB AUDIO API SYSTEM ---
 let audioCtx = null;
@@ -46,448 +56,420 @@ function playSound(type) {
         if (audioCtx.state === 'suspended') {
             audioCtx.resume();
         }
-        
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        
         const now = audioCtx.currentTime;
 
-        if (type === 'attack') {
+        if (type === 'alert') {
             osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(300, now);
-            osc.frequency.exponentialRampToValueAtTime(100, now + 0.3);
-            gain.gain.setValueAtTime(0.15, now);
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.linearRampToValueAtTime(400, now + 0.3);
+            gain.gain.setValueAtTime(0.2, now);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
             osc.start(now);
             osc.stop(now + 0.3);
-        } else if (type === 'defend') {
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(440, now);
-            osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
-            gain.gain.setValueAtTime(0.15, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-            osc.start(now);
-            osc.stop(now + 0.2);
-        } else if (type === 'blocked') {
+        } else if (type === 'block') {
             osc.type = 'triangle';
-            osc.frequency.setValueAtTime(600, now);
-            osc.frequency.setValueAtTime(900, now + 0.05);
-            gain.gain.setValueAtTime(0.2, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-            osc.start(now);
-            osc.stop(now + 0.15);
-        } else if (type === 'breach') {
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(150, now);
-            osc.frequency.linearRampToValueAtTime(80, now + 0.4);
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.setValueAtTime(600, now + 0.1);
             gain.gain.setValueAtTime(0.25, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
             osc.start(now);
-            osc.stop(now + 0.4);
+            osc.stop(now + 0.25);
         } else if (type === 'click') {
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.setValueAtTime(700, now);
             gain.gain.setValueAtTime(0.05, now);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
             osc.start(now);
             osc.stop(now + 0.05);
         }
     } catch (e) {
-        console.warn('Audio Error:', e);
+        console.warn('Audio error:', e);
     }
 }
 
-// Sound Toggle Handler
+// --- DOM INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
+    initGeoCanvas();
+    startGeoMapLoop();
+
     const soundBtn = document.getElementById('soundToggle');
-    soundBtn.addEventListener('click', () => {
-        state.soundEnabled = !state.soundEnabled;
-        soundBtn.innerHTML = state.soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
-        playSound('click');
-    });
-
-    const resetBtn = document.getElementById('resetBtn');
-    resetBtn.addEventListener('click', resetSim);
-
-    initCanvas();
-    animateTopology();
-    logSIEM('System security initialized. Defensive monitors active.', 'log-system');
-});
-
-// Canvas Setup
-function initCanvas() {
-    canvas = document.getElementById('networkCanvas');
-    ctx = canvas.getContext('2d');
-
-    function resize() {
-        const rect = canvas.parentElement.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-    }
-    resize();
-    window.addEventListener('resize', resize);
-}
-
-// Topology Render Loop
-function animateTopology() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const w = canvas.width;
-    const h = canvas.height;
-
-    // 1. Draw Network Connection Lines
-    drawConnection(nodes.attacker, nodes.firewall, '#ef4444');
-    drawConnection(nodes.firewall, nodes.server, '#3b82f6');
-    drawConnection(nodes.server, nodes.db, '#06b6d4');
-    drawConnection(nodes.server, nodes.employee, '#a855f7');
-
-    // 2. Render Nodes
-    for (const key in nodes) {
-        const n = nodes[key];
-        const nx = n.x * w;
-        const ny = n.y * h;
-
-        // Node Glow Effect
-        ctx.beginPath();
-        ctx.arc(nx, ny, 28, 0, Math.PI * 2);
-        if (key === 'firewall' && isAnyDefenseActive()) {
-            ctx.fillStyle = 'rgba(59, 130, 246, 0.25)';
-            ctx.strokeStyle = '#3b82f6';
-        } else if (key === 'server' && state.health < 50) {
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
-            ctx.strokeStyle = '#ef4444';
-        } else {
-            ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
-            ctx.strokeStyle = '#475569';
-        }
-        ctx.lineWidth = 2;
-        ctx.fill();
-        ctx.stroke();
-
-        // Node Icon & Label
-        ctx.font = '20px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(n.icon, nx, ny);
-
-        ctx.font = '12px Inter, sans-serif';
-        ctx.fillStyle = '#9ca3af';
-        ctx.fillText(n.name, nx, ny + 40);
-    }
-
-    // 3. Render Floating Traffic Packets
-    for (let i = packets.length - 1; i >= 0; i--) {
-        const p = packets[i];
-        p.progress += p.speed;
-
-        const startX = nodes[p.from].x * w;
-        const startY = nodes[p.from].y * h;
-        const targetX = nodes[p.to].x * w;
-        const targetY = nodes[p.to].y * h;
-
-        const currentX = startX + (targetX - startX) * p.progress;
-        const currentY = startY + (targetY - startY) * p.progress;
-
-        // Check if packet reached firewall node
-        if (p.to === 'firewall' && p.progress >= 1) {
-            if (p.blocked) {
-                // Trigger Defense Block Effect
-                createExplosion(currentX, currentY, '#3b82f6');
-                playSound('blocked');
-                logSIEM(`🛡️ DEFENSE SUCCESS: Firewall blocked ${p.attackType.toUpperCase()} attack packet!`, 'log-blue');
-                updateScores(15, 0);
-                packets.splice(i, 1);
-                continue;
-            } else {
-                // Forward packet to actual target
-                p.from = 'firewall';
-                p.to = p.finalTarget;
-                p.progress = 0;
-                continue;
-            }
-        }
-
-        // Check if packet reached final target
-        if (p.progress >= 1) {
-            // Breach success!
-            createExplosion(currentX, currentY, '#ef4444');
-            playSound('breach');
-            logSIEM(`💥 CRITICAL BREACH: ${p.attackType.toUpperCase()} exploit compromised ${p.finalTarget.toUpperCase()}!`, 'log-red');
-            damageServer(p.damage);
-            updateScores(0, 20);
-            packets.splice(i, 1);
-            continue;
-        }
-
-        // Draw Packet
-        ctx.beginPath();
-        ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 10;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-    }
-
-    // 4. Render Particle Explosions
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const pt = particles[i];
-        pt.x += pt.vx;
-        pt.y += pt.vy;
-        pt.life -= 0.05;
-
-        if (pt.life <= 0) {
-            particles.splice(i, 1);
-            continue;
-        }
-
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
-        ctx.fillStyle = pt.color;
-        ctx.globalAlpha = pt.life;
-        ctx.fill();
-        ctx.globalAlpha = 1.0;
-    }
-
-    animFrameId = requestAnimationFrame(animateTopology);
-}
-
-function drawConnection(n1, n2, color) {
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.beginPath();
-    ctx.moveTo(n1.x * w, n1.y * h);
-    ctx.lineTo(n2.x * w, n2.y * h);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-}
-
-function createExplosion(x, y, color) {
-    for (let i = 0; i < 12; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 4 + 1;
-        particles.push({
-            x: x,
-            y: y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            size: Math.random() * 4 + 2,
-            color: color,
-            life: 1.0
+    if (soundBtn) {
+        soundBtn.addEventListener('click', () => {
+            state.soundEnabled = !state.soundEnabled;
+            soundBtn.innerHTML = state.soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+            playSound('click');
         });
     }
-}
 
-function isAnyDefenseActive() {
-    return Object.values(state.defenses).some(val => val === true);
-}
+    logSiem('SIEM Agent initialized. Waiting for threat events...', 'log-info');
+});
 
-// --- ATTACK TRIGGER LOGIC (RED TEAM) ---
-function triggerAttack(type) {
-    playSound('attack');
-    let attackConfig = {
-        type: type,
-        color: '#ef4444',
-        finalTarget: 'server',
-        blocked: false,
-        damage: 20
-    };
-
-    if (type === 'brute_force') {
-        attackConfig.finalTarget = 'server';
-        attackConfig.blocked = state.defenses.mfa;
-        logSIEM('⚠️ RED TEAM: Initiated Password Brute-Force attack wave against /login.', 'log-red');
-    } else if (type === 'phishing') {
-        attackConfig.finalTarget = 'employee';
-        attackConfig.blocked = state.defenses.phish;
-        attackConfig.damage = 25;
-        logSIEM('⚠️ RED TEAM: Dispatched spoofed CEO Phishing Email campaign to employees.', 'log-red');
-    } else if (type === 'ddos') {
-        attackConfig.finalTarget = 'server';
-        attackConfig.blocked = state.defenses.waf;
-        attackConfig.damage = 30;
-        logSIEM('⚠️ RED TEAM: Launched DDoS Botnet Traffic Flood (10,000 req/sec).', 'log-red');
-        
-        // Spawn multiple packets for DDoS
-        for (let i = 0; i < 5; i++) {
-            setTimeout(() => {
-                packets.push({
-                    from: 'attacker',
-                    to: 'firewall',
-                    finalTarget: 'server',
-                    attackType: 'ddos',
-                    color: '#f59e0b',
-                    speed: 0.02,
-                    progress: 0,
-                    blocked: state.defenses.waf,
-                    damage: 6
-                });
-            }, i * 150);
-        }
-        return;
-    } else if (type === 'sqli') {
-        attackConfig.finalTarget = 'db';
-        attackConfig.blocked = state.defenses.sqli;
-        attackConfig.damage = 35;
-        logSIEM("⚠️ RED TEAM: Sent SQL Payload (`' OR '1'='1`) into web search form.", 'log-red');
-    }
-
-    packets.push({
-        from: 'attacker',
-        to: 'firewall',
-        finalTarget: attackConfig.finalTarget,
-        attackType: type,
-        color: attackConfig.color,
-        speed: 0.015,
-        progress: 0,
-        blocked: attackConfig.blocked,
-        damage: attackConfig.damage
-    });
-}
-
-// --- DEFENSE TOGGLE LOGIC (BLUE TEAM) ---
-function toggleDefense(type, active) {
-    state.defenses[type] = active;
-    playSound('defend');
-
-    const names = {
-        mfa: 'Multi-Factor Authentication (MFA)',
-        phish: 'Email Gateway & Awareness Training',
-        waf: 'WAF & Rate-Limiting Firewall',
-        sqli: 'Input Sanitization & Prepared Queries'
-    };
-
-    if (active) {
-        logSIEM(`🔵 BLUE TEAM: Activated ${names[type]}. Security controls enforced!`, 'log-blue');
-    } else {
-        logSIEM(`⚠️ BLUE TEAM WARNING: Deactivated ${names[type]}. System vulnerable!`, 'log-alert');
-    }
-}
-
-// --- STATE UPDATES & SCORES ---
-function damageServer(amount) {
-    state.health = Math.max(0, state.health - amount);
-    const bar = document.getElementById('healthBar');
-    const val = document.getElementById('healthValue');
+// View Switcher
+function switchView(mode) {
+    state.viewMode = mode;
+    document.body.className = `view-mode-${mode}`;
     
-    bar.style.width = state.health + '%';
-    val.textContent = state.health + '%';
+    const btns = document.querySelectorAll('.view-btn');
+    btns.forEach(b => b.classList.remove('active'));
+    
+    if (mode === 'dual') btns[0].classList.add('active');
+    if (mode === 'red') btns[1].classList.add('active');
+    if (mode === 'blue') btns[2].classList.add('active');
 
-    if (state.health < 30) {
-        bar.style.backgroundColor = '#ef4444';
-        document.getElementById('serverStatusBadge').className = 'badge badge-danger';
-        document.getElementById('serverStatusBadge').textContent = 'CRITICAL UNDER ATTACK';
-    } else if (state.health < 70) {
-        bar.style.backgroundColor = '#f59e0b';
-        document.getElementById('serverStatusBadge').className = 'badge badge-warning';
-        document.getElementById('serverStatusBadge').textContent = 'WARNING HIGH LOAD';
+    playSound('click');
+    setTimeout(resizeGeoCanvas, 100);
+}
+
+// --- RED TEAM BRUTE FORCE ENGINE ---
+function startBruteForce() {
+    const userSel = document.getElementById('targetUserSelect').value;
+    const originRaw = document.getElementById('originIpSelect').value;
+    const [ip, loc, flag] = originRaw.split('|');
+
+    state.targetUser = userSel;
+    state.originIp = ip;
+    state.location = loc;
+    state.flag = flag;
+
+    // Check if IP is already blocked
+    if (state.blockedIps.includes(ip)) {
+        appendRedTerminal(`❌ [ERROR] Connection refused! IP ${ip} is blocked by target firewall.`, 'term-blocked');
+        return;
+    }
+
+    state.isAttacking = true;
+    state.attemptsCount = 0;
+    
+    document.getElementById('launchAttackBtn').classList.add('hidden');
+    document.getElementById('stopAttackBtn').classList.remove('hidden');
+
+    appendRedTerminal(`🚀 [INITIATING] Starting Brute Force attack wave against ${userSel}...`, 'term-system');
+    appendRedTerminal(`🌐 Attacker Origin: ${ip} (${loc} ${flag})`, 'term-system');
+
+    // Broadcast to Blue Team
+    const attackPayload = {
+        targetUser: userSel,
+        originIp: ip,
+        location: loc,
+        flag: flag
+    };
+    channel.postMessage({ type: 'START_ATTACK', data: attackPayload });
+    handleIncomingAttack(attackPayload);
+
+    let dictIdx = 0;
+    state.attackInterval = setInterval(() => {
+        if (!state.isAttacking) return;
+        
+        // Re-check block status
+        if (state.blockedIps.includes(state.originIp)) {
+            stopBruteForce('IP_BLOCKED');
+            return;
+        }
+
+        const pass = passwordDictionary[dictIdx % passwordDictionary.length];
+        dictIdx++;
+        state.attemptsCount++;
+
+        const time = new Date().toLocaleTimeString();
+        appendRedTerminal(`[${time}] POST /login user=${userSel} pass=${pass} -> 401 Unauthorized`, 'term-attempt');
+    }, 350);
+}
+
+function stopBruteForce(reason = 'MANUAL') {
+    state.isAttacking = false;
+    if (state.attackInterval) clearInterval(state.attackInterval);
+
+    document.getElementById('launchAttackBtn').classList.remove('hidden');
+    document.getElementById('stopAttackBtn').classList.add('hidden');
+
+    if (reason === 'IP_BLOCKED') {
+        appendRedTerminal(`🚫 [ATTACK HALTED] Connection reset by peer! Target firewall blocked IP ${state.originIp}.`, 'term-blocked');
     } else {
-        bar.style.backgroundColor = '#10b981';
-        document.getElementById('serverStatusBadge').className = 'badge badge-success';
-        document.getElementById('serverStatusBadge').textContent = 'SYSTEM ONLINE';
+        appendRedTerminal(`⏹️ [ATTACK STOPPED] Brute Force attack wave terminated.`, 'term-system');
+    }
+
+    channel.postMessage({ type: 'STOP_ATTACK', data: { reason } });
+    handleStopAttack({ reason });
+}
+
+function appendRedTerminal(msg, className = 'term-system') {
+    const term = document.getElementById('redTerminal');
+    const line = document.createElement('div');
+    line.className = `term-line ${className}`;
+    line.textContent = msg;
+    term.appendChild(line);
+    term.scrollTop = term.scrollHeight;
+}
+
+function clearRedTerminal() {
+    playSound('click');
+    document.getElementById('redTerminal').innerHTML = '<div class="term-line term-system">[TERMINAL CLEARED]</div>';
+}
+
+// --- BLUE TEAM SIEM ENGINE ---
+function handleIncomingAttack(data) {
+    state.isAttacking = true;
+    state.targetUser = data.targetUser;
+    state.originIp = data.originIp;
+    state.location = data.location;
+    state.flag = data.flag;
+
+    playSound('alert');
+
+    // Update SIEM Metrics
+    document.getElementById('activeAlertsCount').textContent = '1';
+    document.getElementById('threatPulse').className = 'pulse-indicator red';
+    document.getElementById('threatLevelText').textContent = 'THREAT LEVEL: CRITICAL';
+
+    // Show Incident Banner
+    const banner = document.getElementById('incidentBanner');
+    document.getElementById('alertTimestamp').textContent = new Date().toLocaleTimeString();
+    document.getElementById('alertTargetUser').textContent = data.targetUser;
+    document.getElementById('alertSourceIp').textContent = data.originIp;
+    document.getElementById('alertLocation').textContent = `${data.location} ${data.flag}`;
+    document.getElementById('alertRate').textContent = '350 attempts / min';
+
+    banner.classList.remove('hidden');
+
+    logSiem(`🚨 [HIGH SEVERITY ALERT] Brute-force velocity threshold breached for user ${data.targetUser} from IP ${data.originIp} (${data.location} ${data.flag})`, 'log-high');
+}
+
+function handleStopAttack(data) {
+    state.isAttacking = false;
+    if (!state.blockedIps.includes(state.originIp)) {
+        document.getElementById('activeAlertsCount').textContent = '0';
+        document.getElementById('threatPulse').className = 'pulse-indicator green';
+        document.getElementById('threatLevelText').textContent = 'THREAT LEVEL: LOW';
     }
 }
 
-function updateScores(bluePts, redPts) {
-    state.blueScore += bluePts;
-    state.redScore += redPts;
-    document.getElementById('blueScore').textContent = state.blueScore;
-    document.getElementById('redScore').textContent = state.redScore;
+// --- BLUE TEAM DEFENSE ACTION: BLOCK IP ---
+function blockAttackerIp() {
+    const ipToBlock = state.originIp;
+    
+    if (!state.blockedIps.includes(ipToBlock)) {
+        state.blockedIps.push(ipToBlock);
+        state.siemScore += 50;
+    }
+
+    playSound('block');
+
+    // Broadcast Block IP to Red Team
+    channel.postMessage({ type: 'BLOCK_IP', data: { ip: ipToBlock } });
+    handleIpBlocked({ ip: ipToBlock });
+}
+
+function handleIpBlocked(data) {
+    const ip = data.ip;
+    if (!state.blockedIps.includes(ip)) {
+        state.blockedIps.push(ip);
+    }
+
+    // Stop red team attack if running on this IP
+    if (state.originIp === ip) {
+        state.isAttacking = false;
+        if (state.attackInterval) clearInterval(state.attackInterval);
+        document.getElementById('launchAttackBtn').classList.remove('hidden');
+        document.getElementById('stopAttackBtn').classList.add('hidden');
+        appendRedTerminal(`🚫 [CONNECTION REFUSED] Your IP ${ip} has been blocked by Blue Team Firewall!`, 'term-blocked');
+    }
+
+    // Update SIEM UI
+    document.getElementById('incidentBanner').classList.add('hidden');
+    document.getElementById('activeAlertsCount').textContent = '0';
+    document.getElementById('threatPulse').className = 'pulse-indicator green';
+    document.getElementById('threatLevelText').textContent = 'THREAT LEVEL: MITIGATED';
+    document.getElementById('blockedIpCount').textContent = state.blockedIps.length;
+    document.getElementById('siemScore').textContent = state.siemScore;
+
+    renderBlocklistTable();
+    logSiem(`🛡️ [MITIGATED] Firewall rule deployed. IP ${ip} blocked from network. Attack stopped!`, 'log-mitigated');
+}
+
+function dismissAlert() {
+    playSound('click');
+    document.getElementById('incidentBanner').classList.add('hidden');
+}
+
+function unblockIp(ip) {
+    playSound('click');
+    state.blockedIps = state.blockedIps.filter(item => item !== ip);
+    document.getElementById('blockedIpCount').textContent = state.blockedIps.length;
+    renderBlocklistTable();
+    logSiem(`⚠️ [FIREWALL RULE REMOVED] IP ${ip} unblocked.`, 'log-warn');
+}
+
+function renderBlocklistTable() {
+    const tbody = document.getElementById('blocklistTableBody');
+    if (state.blockedIps.length === 0) {
+        tbody.innerHTML = '<tr id="emptyBlocklistRow"><td colspan="4" class="text-center text-muted">No IP addresses blocked yet.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = state.blockedIps.map(ip => `
+        <tr>
+            <td><code>${ip}</code></td>
+            <td>${state.location} ${state.flag}</td>
+            <td>Brute Force Attack</td>
+            <td>
+                <button class="btn btn-ghost btn-sm" onclick="unblockIp('${ip}')">Unblock</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function logSiem(msg, className = 'log-info') {
+    const consoleBody = document.getElementById('siemConsole');
+    const time = new Date().toLocaleTimeString();
+    const row = document.createElement('div');
+    row.className = `log-row ${className}`;
+    row.textContent = `[${time}] ${msg}`;
+    consoleBody.appendChild(row);
+    consoleBody.scrollTop = consoleBody.scrollHeight;
+}
+
+function clearSiemLogs() {
+    playSound('click');
+    document.getElementById('siemConsole').innerHTML = '<div class="log-row log-info">[SIEM LOGS CLEARED]</div>';
 }
 
 function resetSim() {
     playSound('click');
-    state.health = 100;
-    state.blueScore = 0;
-    state.redScore = 0;
-    packets = [];
-    particles = [];
+    state.isAttacking = false;
+    if (state.attackInterval) clearInterval(state.attackInterval);
+    state.blockedIps = [];
+    state.siemScore = 100;
     
-    // Reset switches
-    for (const key in state.defenses) {
-        state.defenses[key] = false;
-        const el = document.getElementById(`def_${key}`);
-        if (el) el.checked = false;
+    document.getElementById('launchAttackBtn').classList.remove('hidden');
+    document.getElementById('stopAttackBtn').classList.add('hidden');
+    document.getElementById('incidentBanner').classList.add('hidden');
+    document.getElementById('activeAlertsCount').textContent = '0';
+    document.getElementById('blockedIpCount').textContent = '0';
+    document.getElementById('siemScore').textContent = '100';
+    document.getElementById('threatPulse').className = 'pulse-indicator green';
+    document.getElementById('threatLevelText').textContent = 'THREAT LEVEL: LOW';
+
+    renderBlocklistTable();
+    clearRedTerminal();
+    clearSiemLogs();
+    logSiem('[SYSTEM RESET] SIEM baseline restored.', 'log-info');
+
+    channel.postMessage({ type: 'RESET' });
+}
+
+function resetLocalState() {
+    state.isAttacking = false;
+    if (state.attackInterval) clearInterval(state.attackInterval);
+    state.blockedIps = [];
+    state.siemScore = 100;
+}
+
+// --- GEOGRAPHIC THREAT CANVAS RENDERER ---
+let geoCanvas, geoCtx;
+let mapAnimId;
+
+function initGeoCanvas() {
+    geoCanvas = document.getElementById('geoCanvas');
+    if (!geoCanvas) return;
+    geoCtx = geoCanvas.getContext('2d');
+    resizeGeoCanvas();
+    window.addEventListener('resize', resizeGeoCanvas);
+}
+
+function resizeGeoCanvas() {
+    if (!geoCanvas) return;
+    const rect = geoCanvas.parentElement.getBoundingClientRect();
+    geoCanvas.width = rect.width;
+    geoCanvas.height = rect.height;
+}
+
+function startGeoMapLoop() {
+    function render() {
+        if (!geoCtx) return;
+        const w = geoCanvas.width;
+        const h = geoCanvas.height;
+
+        geoCtx.clearRect(0, 0, w, h);
+
+        // Draw stylized world grid background
+        geoCtx.strokeStyle = '#1e293b';
+        geoCtx.lineWidth = 0.5;
+        for (let x = 0; x < w; x += 40) {
+            geoCtx.beginPath();
+            geoCtx.moveTo(x, 0);
+            geoCtx.lineTo(x, h);
+            geoCtx.stroke();
+        }
+        for (let y = 0; y < h; y += 30) {
+            geoCtx.beginPath();
+            geoCtx.moveTo(0, y);
+            geoCtx.lineTo(w, y);
+            geoCtx.stroke();
+        }
+
+        // Target Node (Corporate Datacenter / London UK)
+        const targetPos = { x: w * 0.52, y: h * 0.4 };
+
+        // Draw Target Datacenter Node
+        geoCtx.beginPath();
+        geoCtx.arc(targetPos.x, targetPos.y, 8, 0, Math.PI * 2);
+        geoCtx.fillStyle = '#3b82f6';
+        geoCtx.shadowColor = '#3b82f6';
+        geoCtx.shadowBlur = 12;
+        geoCtx.fill();
+        geoCtx.shadowBlur = 0;
+
+        geoCtx.font = '11px Inter, sans-serif';
+        geoCtx.fillStyle = '#94a3b8';
+        geoCtx.fillText('Corporate HQ (London)', targetPos.x - 45, targetPos.y + 22);
+
+        // If attack is active, draw incoming threat vector from origin IP location
+        if (state.isAttacking && !state.blockedIps.includes(state.originIp)) {
+            // Origin Location mapping coordinates
+            let originPos = { x: w * 0.48, y: h * 0.38 }; // Germany default
+            if (state.originIp.startsWith('45.')) originPos = { x: w * 0.65, y: h * 0.35 }; // Russia
+            if (state.originIp.startsWith('103.')) originPos = { x: w * 0.82, y: h * 0.48 }; // China
+            if (state.originIp.startsWith('198.')) originPos = { x: w * 0.25, y: h * 0.42 }; // USA
+
+            // Draw Threat Origin Pulsing Dot
+            const time = Date.now() * 0.005;
+            const pulseRadius = 10 + Math.sin(time) * 4;
+
+            geoCtx.beginPath();
+            geoCtx.arc(originPos.x, originPos.y, pulseRadius, 0, Math.PI * 2);
+            geoCtx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+            geoCtx.fill();
+
+            geoCtx.beginPath();
+            geoCtx.arc(originPos.x, originPos.y, 6, 0, Math.PI * 2);
+            geoCtx.fillStyle = '#ef4444';
+            geoCtx.shadowColor = '#ef4444';
+            geoCtx.shadowBlur = 15;
+            geoCtx.fill();
+            geoCtx.shadowBlur = 0;
+
+            // Curved Threat Vector Line
+            geoCtx.beginPath();
+            geoCtx.moveTo(originPos.x, originPos.y);
+            const cpX = (originPos.x + targetPos.x) / 2;
+            const cpY = Math.min(originPos.y, targetPos.y) - 40;
+            geoCtx.quadraticCurveTo(cpX, cpY, targetPos.x, targetPos.y);
+            geoCtx.strokeStyle = '#ef4444';
+            geoCtx.lineWidth = 2;
+            geoCtx.setLineDash([6, 6]);
+            geoCtx.stroke();
+            geoCtx.setLineDash([]);
+
+            geoCtx.font = '11px Fira Code, sans-serif';
+            geoCtx.fillStyle = '#f87171';
+            geoCtx.fillText(`⚡ ${state.originIp} (${state.location})`, originPos.x - 30, originPos.y - 14);
+        }
+
+        mapAnimId = requestAnimationFrame(render);
     }
-
-    damageServer(0);
-    document.getElementById('blueScore').textContent = '0';
-    document.getElementById('redScore').textContent = '0';
-    logSIEM('[RESET] Simulation environment restored to baseline.', 'log-system');
-}
-
-// --- SIEM LOGGER ---
-function logSIEM(message, className = 'log-system') {
-    const consoleBody = document.getElementById('consoleBody');
-    const time = new Date().toLocaleTimeString();
-    const entry = document.createElement('div');
-    entry.className = `log-entry ${className}`;
-    entry.textContent = `[${time}] ${message}`;
-    
-    consoleBody.appendChild(entry);
-    consoleBody.scrollTop = consoleBody.scrollHeight;
-}
-
-function clearLogs() {
-    playSound('click');
-    document.getElementById('consoleBody').innerHTML = '<div class="log-entry log-system">[CONSOLE CLEARED]</div>';
-}
-
-// --- EDUCATIONAL CONCEPTS MODAL ---
-const conceptsInfo = {
-    brute_force: {
-        title: '🔓 Password Brute-Force Attack',
-        content: `
-            <p><strong>What is it?</strong> A brute-force attack is when an attacker uses automated computer scripts to try thousands or millions of common password combinations (like <em>"123456"</em> or <em>"password"</em>) until they guess the right one.</p>
-            <p><strong>Red Team Goal:</strong> Gain unauthorized login access to a user or admin account.</p>
-            <p><strong>Blue Team Defense (MFA):</strong> Multi-Factor Authentication requires a 2nd step (like a code sent to your phone). Even if the attacker guesses the password, they can't log in without your phone!</p>
-        `
-    },
-    phishing: {
-        title: '🎣 Phishing Email Campaign',
-        content: `
-            <p><strong>What is it?</strong> Phishing is when attackers send deceptive fake emails impersonating someone trustworthy (like a principal, bank, or gaming platform) to trick you into clicking a bad link or typing your password.</p>
-            <p><strong>Red Team Goal:</strong> Trick unsuspecting employees into handing over secret login credentials.</p>
-            <p><strong>Blue Team Defense:</strong> Email security filters inspect links in incoming mail, and security awareness training teaches users to spot red flags in fake emails.</p>
-        `
-    },
-    ddos: {
-        title: '⚡ DDoS (Distributed Denial of Service) Flood',
-        content: `
-            <p><strong>What is it?</strong> A DDoS attack uses a network of infected computers (a botnet) to send massive waves of fake traffic to a website all at once, overwhelming the server so real users cannot access it.</p>
-            <p><strong>Red Team Goal:</strong> Crash the website or cause severe slowdowns.</p>
-            <p><strong>Blue Team Defense (WAF & Rate Limiting):</strong> A Web Application Firewall acts like a smart traffic guard. It identifies abnormal spikes in bot traffic and drops those fake requests before they reach the server.</p>
-        `
-    },
-    sqli: {
-        title: '💉 SQL Injection (SQLi) Exploit',
-        content: `
-            <p><strong>What is it?</strong> Databases store website data using a computer language called SQL. If a website search box isn't secured, an attacker can type sneaky database commands (like <code>' OR 1=1 --</code>) into the box to trick the database into revealing secret data!</p>
-            <p><strong>Red Team Goal:</strong> Bypass login checks or leak secret database tables.</p>
-            <p><strong>Blue Team Defense:</strong> Input sanitization and prepared queries clean all user inputs, forcing the database to treat inputs strictly as harmless plain text.</p>
-        `
-    }
-};
-
-function showInfo(key) {
-    playSound('click');
-    const modal = document.getElementById('infoModal');
-    const title = document.getElementById('modalTitle');
-    const body = document.getElementById('modalBody');
-
-    if (conceptsInfo[key]) {
-        title.innerHTML = conceptsInfo[key].title;
-        body.innerHTML = conceptsInfo[key].content;
-        modal.classList.remove('hidden');
-    }
-}
-
-function closeModal() {
-    playSound('click');
-    document.getElementById('infoModal').classList.add('hidden');
+    render();
 }
